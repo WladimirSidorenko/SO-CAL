@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # coding: utf-8
 ######## Semantic Orientation Calculator (SO-CAL) #######
 # The code is is majorly from Julian Brooke's code written in 2008
@@ -47,9 +48,43 @@
 # and sentence boundaries
 
 
-import operator
+##################################################################
+# Imports
+from collections import defaultdict
+from typing import Optional
 import argparse
+import json
+import operator
 import os
+import yaml
+
+
+##################################################################
+# Methods
+DFLT_CONFIG = os.path.join(
+    os.path.join(
+        os.path.dirname(__file__),
+        '..', '..', 'Resources', 'config_files', 'en_SO_Calc.ini')
+    )
+
+
+##################################################################
+# Constants
+class SO(object):
+    pos_cnt = 0
+    neg_cnt = 0
+    neut_cnt = 0
+    ttl_cnt = 0
+    pos_weight = 0.
+    neg_weight = 0.
+
+    def add(self, weight):
+        if weight > 0.:
+            self.pos_cnt += 1
+            self.pos_weight += weight
+        elif weight < 0.:
+            self.neg_cnt += 1
+            self.neg_weight += abs(weight)
 
 
 def get_command_arguments():
@@ -58,222 +93,25 @@ def get_command_arguments():
     :return: a list of arguments
     '''
     parser = argparse.ArgumentParser(description='SFU Sentiment Calculator')
-    parser.add_argument('--input', '-i', type=str, dest='input', action='store',
-                        default='../Sample/output/Preprocessed_Output/BOOKS/no1.txt',
-                        help="The input file or folder, and the file should be SO_CAL preprocessed text")
-
-    parser.add_argument('--basicout_path', '-bo', type=str, dest='basicout_path', action='store',
-                        default='',
-                        help="The basic output")
-
-    parser.add_argument('--richcout_path', '-ro', type=str, dest='richout_path', action='store',
-                        default='',
-                        help="The basic output")
+    parser.add_argument('input',
+                        nargs='+',
+                        help="Input file(s) to be analyzed by SO_CAL.")
 
     parser.add_argument('--config', '-c', type=str, dest='config', action='store',
-                        default='../Resources/config_files/en_SO_Calc.ini',
+                        default=DFLT_CONFIG,
                         help="The configuration file for SO-CAL")
 
 
     args = parser.parse_args()
     return args
 
-args = get_command_arguments()
-infile = open(args.input, "r")
-configfile = open(args.config, "r")
 
-basicout = open(args.basicout_path, "a")
-richout = open(args.richout_path, "a")
-
-config = {}
-
-def get_configuration_from_file():
+def get_config_from_file(fname):
 # gets the configuration settings from the supplied .ini file
-    for line in configfile.readlines():
-        if line:
-            line = line.split("#")[0].strip()
-            if "=" in line:
-                (key, value) = map(str.strip, line.split("="))
-                if value.strip():
-                    if "[" not in value:
-                        if value[-1].isdigit():
-                            value = float(value)
-                        elif value == "True":
-                            value = True
-                        elif value == "False":
-                            value = False
-                        config[key] = value
-                    else:
-                         elements = value[1:-1].split( ",")
-                         if ":" in value:
-                             svalues = {}
-                             for element in elements:
-                                 if element:
-                                     (skey,svalue) = map(str.strip, element.split(":"))
-                                     if svalue[-1].isdigit():
-                                         svalue = float(svalue)
-                                     elif svalue == "True":
-                                         svalue = True
-                                     elif svalue == "False":
-                                         svalue = False
-                                 svalues[skey] = svalue
-                             config[key] = svalues
-                         else:
-                             config[key] = map(str.strip, elements)
-    configfile.close()
+    with open(fname) as ifile:
+        config = yaml.load(ifile)
+    return config
 
-get_configuration_from_file()
-
-language = config["language"]
-use_adjectives = config["use_adjectives"]
-use_nouns = config["use_nouns"]
-use_verbs = config["use_verbs"]
-use_adverbs = config["use_adverbs"]
-use_intensifiers = config["use_intensifiers"]
-use_negation = config["use_negation"]
-use_comparatives = config["use_comparatives"]
-use_superlatives = config["use_superlatives"]
-use_multiword_dictionaries = config["use_multiword_dictionaries"]
-use_extra_dict = config["use_extra_dict"]
-use_XML_weighing = config["use_XML_weighing"]
-use_weight_by_location = config["use_weight_by_location"]
-use_irrealis = config["use_irrealis"]
-use_subjunctive = config["use_subjunctive"]
-use_imperative = config["use_imperative"]
-use_conditional = config["use_conditional"]
-use_highlighters = config["use_highlighters"]
-use_cap_int = config["use_cap_int"]
-fix_cap_tags = config["fix_cap_tags"]
-use_exclam_int = config["use_exclam_int"]
-use_quest_mod = config["use_quest_mod"]
-use_quote_mod = config["use_quote_mod"]
-use_definite_assertion = config["use_definite_assertion"]
-use_clause_final_int = config["use_clause_final_int"]
-use_heavy_negation = config["use_heavy_negation"]
-use_word_counts_lower = config["use_word_counts_lower"]
-use_word_counts_block = config["use_word_counts_block"]
-use_blocking = config["use_blocking"]
-adv_learning = config["adv_learning"]
-limit_shift = config["limit_shift"]
-neg_negation_nullification = config["neg_negation_nullification"]
-polarity_switch_neg = config["polarity_switch_neg"]
-restricted_neg = config["restricted_neg"]
-simple_SO = config["simple_SO"]
-use_boundary_words = config["use_boundary_words"]
-use_boundary_punct = config["use_boundary_punctuation"]
-
-### Modifiers ###
-
-adj_multiplier = config["adj_multiplier"]
-adv_multiplier = config["adv_multiplier"]
-verb_multiplier = config["verb_multiplier"]
-noun_multiplier = config["noun_multiplier"]
-int_multiplier = config["int_multiplier"]
-neg_multiplier = config["neg_multiplier"]
-capital_modifier = config["capital_modifier"]
-exclam_modifier = config["exclam_modifier"]
-verb_neg_shift = config["verb_neg_shift"]
-noun_neg_shift = config["noun_neg_shift"]
-adj_neg_shift = config["adj_neg_shift"]
-adv_neg_shift = config["adv_neg_shift"]
-blocker_cutoff = config["blocker_cutoff"]
-
-### Dictionaries ###
-
-dic_dir = config["dic_dir"]
-adj_dict_path = dic_dir + config["adj_dict"]
-adv_dict_path = dic_dir + config["adv_dict"]
-noun_dict_path = dic_dir + config["noun_dict"]
-verb_dict_path = dic_dir + config["verb_dict"]
-int_dict_path = dic_dir + config["int_dict"]
-if use_extra_dict and config["extra_dict"]:
-    extra_dict_path = dic_dir + config["extra_dict"]
-else:
-    extra_dict_path = False
-adj_dict = {} # simple (single-word) dictionaries
-adv_dict = {}
-noun_dict = {}
-verb_dict = {}
-int_dict = {}
-c_adj_dict = {} # complex (multi-word) dictionaries
-c_adv_dict = {}
-c_noun_dict = {}
-c_verb_dict = {}
-c_int_dict = {}
-new_adv_dict = {}
-
-### Text ###
-
-text = [] # the text is a list of word, tag lists
-weights = [] # weights should be the same length as the text, one for each token
-word_counts = [{},{},{},{}] # keeps track of number of times each word lemma appears in the text
-text_SO = 0 # a sum of the SO value of all the words in the text
-SO_counter = 0 # a count of the number of SO carrying terms
-boundaries = [] # the location of newline boundaries from the input
-
-### Internal Word lists ###
-if language == "English":
-    not_wanted_adj = ["other", "same", "such", "first", "next", "last", "few", "many", "less", "more", "least", "most"]
-    not_wanted_adv = [ "really", "especially", "apparently", "actually", "evidently", "suddenly", "completely","honestly", "basically", "probably", "seemingly", "nearly", "highly", "exactly", "equally", "literally", "definitely", "practically", "obviously", "immediately", "intentionally", "usually", "particularly", "shortly", "clearly", "mildly", "sincerely", "accidentally", "eventually", "finally", "personally", "importantly", "specifically", "likely", "absolutely", "necessarily", "strongly", "relatively", "comparatively", "entirely", "possibly", "generally", "expressly", "ultimately", "originally", "initially", "virtually", "technically", "frankly", "seriously", "fairly",  "approximately", "critically", "continually", "certainly",  "regularly", "essentially", "lately", "explicitly", "right", "subtly",  "lastly", "vocally", "technologically", "firstly", "tally", "ideally", "specially", "humanly", "socially", "sexually", "preferably", "immediately", "legally", "hopefully", "largely", "frequently", "factually", "typically"]
-    not_wanted_verb = []
-    negators = ["not", "no", "n't", "neither", "nor", "nothing", "never", "none", "lack", "lacked", "lacking", "lacks", "missing", "without", "absence", "devoid"];
-    punct = [".", ",", ";", "!", "?", ":", ")", "(", "\"", "'", "-"]
-    sent_punct = [".", ";", "!", "?", ":", "\n", "\r"]
-    skipped = {"JJ": ["even", "to", "being", "be", "been", "is", "was", "'ve", "have", "had", "do", "did", "done", "of", "as", "DT", "PSP$"], "RB": ["VB", "VBZ", "VBP", "VBG"], "VB":["TO", "being", "been", "be"], "NN":["DT", "JJ", "NN", "of", "have", "has", "come", "with", "include"]}
-    comparatives = ["less", "more", "as"]
-    superlatives = ["most", "least"]
-    definites = ["the","this", "POS", "PRP$"]
-    noun_tag = "NN"
-    verb_tag = "VB"
-    adj_tag = "JJ"
-    adv_tag = "RB"
-    macro_replace = {"#NP?#": "[PDT]?_[DET|PRP|PRP$|NN|NNP]?_[POS]?_[NN|NNP|JJ]?_[NN|NNP|NNS|NNPS]?","#PER?#": "[me|us|her|him]?","#give#": "give|gave|given","#fall#": "fall|fell|fallen","#get#": "get|got|gotten","#come#": "come|came","#go#": "go|went|gone", "#show#": "show|shown","#make#": "make|made","#hang#": "hang|hung","#break#": "break|broke|broken", "#see#": "see|saw|seen", "#be#": "be|am|are|was|were|been", "#bring#": "bring|brought", "#think#" : "think|thought", "#have#": "has|have|had", "#blow#": "blow|blew", "#build#": "build|built", "#do#": "do|did|done", "#can#": "can|could", "#grow#":"grow|grew|grown", "#hang#": "hang|hung", "#run#": "run|ran", "#stand#": "stand|stood", "#string#": "string|strung", "#hold#" : "hold|held", "#take#" : "take|took|taken"}
-elif language == "Spanish":
-    not_wanted_adj = ["otro","mio","tuyo","suyo","nuestro","vuestro","mismo","primero","segundo","último"]
-    additional = []
-    for adj in not_wanted_adj:
-       additional += [adj[:-1] + "a",adj[:-2] + "os", adj[:-2] + "as"]
-    not_wanted_adj += additional
-    not_wanted_adv = ["básicamente", "claramente","ampliamente", "atentamente", "completamente"]
-    not_wanted_verb = ["haber", "estar"]
-    negators = ["no", "ni", "nunca", "jam"+ chr(225) + "s", "nada", "nadie", "ninguno", "ningunos", "ninguna", "ningunas", "faltar", "falta", "sin"];
-    punct = [".", ",", ";", "!", "?", ":", ")", "(", "\"", "'", "-", chr(161), chr(191)]
-    sent_punct = [".", ";", "!", "?", ":", "\n", "\r", chr(161), chr(191)]
-    skipped = {"AQ": [ "a", "estar", "haber", "hacer", "de", "como", "NC", "PP", "DP", "DD", "DI", "DA", "RG"], "RG": ["VM", "VA", "VS"], "VM":["haber", "estar", "PP"], "NC":["DP", "DD", "DI", "DA", "AQ", "AO", "de", "tener", "hacer", "estar", "con", "incluso"]}
-    comparatives = ["m" + chr(225) + "s", "menos", "como"]
-    definites = ["el", "la", "los", "las", "este", "esta","estos", "estas", "de", "DP"]
-    accents = {chr(237):"i", chr(243):"o", chr(250):"u", chr(233):"e", chr(225):"a",chr(241):"n"}
-    noun_tag = "NC"
-    verb_tag = "VM"
-    adj_tag = "AQ"
-    adv_tag = "RG"
-    macro_replace = {"#NP?#": "[DI|DP|DA]?_[AQ|AC]?_[NC|NP]?_[AQ]?"}
-
-weight_tags= config["weight_tags"]
-weights_by_location = config["weights_by_location"]
-highlighters = config["highlighters"]
-irrealis = config["irrealis"]
-boundary_words = config["boundary_words"]
-
-
-### Multi-word dictionary macros:
-### These macros allow for relatively simple and uncluttered multiword
-### dictionary definitions. The dictionary keys will be replaced by the
-### their corresponding values when they appear in definitions (in the
-### dictionary files). In particular, allows the forms of irregular verbs
-### to be listed only once (here, rather than in the dictionary)
-
-### Output ###
-
-output_calculations = config["output_calculations"]
-output_sentences = config["output_sentences"]
-output_unknown = config["output_unknown"]
-output_used = config["output_used"]
-output_used_lemma = config["output_used_lemma"]
-search = config["search"]
-contain_all_words = config["contain_all_words"]
-
-### Loading functions ###
 
 def same_lists (list1, list2):
     '''
@@ -478,63 +316,6 @@ def is_decimal(string):
                 decimal_yet = True
     return True
 
-def convert_ranges():
-### converts a list of string ranges in faction form (e.g. ["1/4-1/2", 2]) into a
-### a list of numerical ranges plus weight (e.g. [0.25, .5, 2]
-    new_ranges = []
-    for range in weights_by_location:
-        pair = range.split("-")
-        if len(pair) == 2:
-            start = convert_fraction(pair[0].strip())
-            end = convert_fraction(pair[1].strip())
-            if start >= 0 and start <= 1 and end >= 0 and end <= 1 and start < end:
-                new_ranges.append([start,end, weights_by_location[range]])
-    return new_ranges
-
-
-def fill_text_and_weights(infile):
-### Read in the textfile. The file is assumed to be properly spaced and tagged,
-### i.e. there should be a space between every word/tag pair or XML tag
-### if there are XML tags and those tags have been assigned weight, the weight
-### will be applied after the opening tag and will be removed at the closing
-### tag. All XML tags are removed for the SO calculation
-    weight = 1.0 # start with weight 1
-    temp_weight = 1.0 # keep track of weight before a zero
-    for line in infile.readlines():
-        line = line.replace("<", " <").replace(">", "> ")
-        for word in line.strip().split(" "):
-            if word:
-                if word[0] == "<" and word[-1] == ">": #XML tag
-                    XML_tag = word.strip("<>/")
-                    if use_XML_weighing:
-                        if XML_tag in weight_tags:
-                            weight_modifier = weight_tags[XML_tag]
-                        elif is_decimal(XML_tag):
-                            weight_modifier = float(XML_tag)
-                        else:
-                            weight_modifier = 1
-                        if word[1] == "/":
-                            if weight_modifier != 0:
-                                weight /= weight_modifier # remove weight
-                            else:
-                                weight = temp_weight # use pre-zero weight
-                        else:
-                            if weight_modifier != 0:
-                                weight *= weight_modifier # add weight
-                            else:
-                                temp_weight = weight # save weight
-                                weight = 0
-                elif "/" in word:
-                    text.append(word.split("/"))
-                    weights.append(weight)
-        boundaries.append(len(text))
-    if use_weight_by_location:  # add location weights
-        range_dict = convert_ranges()
-        for i in range(len(weights)):
-            for interval in range_dict:  #if the current index in range
-                if interval[0] <= float(i)/len(weights) and interval[1] > float(i)/len(weights):
-                    weights[i] *= interval[2]  #add the weight
-    infile.close()
 
 ### English steming functions ###
 
@@ -700,7 +481,7 @@ def sum_word_counts (word_count_dict):
         count+= word_count_dict[word]
     return count
 
-def find_intensifier(index):
+def find_intensifier(text, index):
 ### this function determines whether the given index is the last word (or,
 ### trivially, the only word) in an intensifier. If so, it returns a list
 ### containing, as its first element, the length of the intensifier and,
@@ -718,7 +499,7 @@ def find_intensifier(index):
         return [1, modifier]
     return False
 
-def match_multiword_f(index, words):
+def match_multiword_f(text, index, words):
 ### this function recursively matches the (partial) multi-word dictionary entry
 ### (words) with the corresponding part of the text (from index)
 ### the function returns a list containing the number of words matched (or -1
@@ -730,9 +511,9 @@ def match_multiword_f(index, words):
         if not isinstance(current,list):
             current = [1, [current]] # unmodified words should be appear once
         if current[0] == "0":
-            return match_multiword_f(index, words[1:]) #this word done
+            return match_multiword_f(text, index, words[1:]) #this word done
         if current[0] == "*" or current[0] == "?": # word optional - try
-            temp = match_multiword_f(index, words[1:]) # without first
+            temp = match_multiword_f(text, index, words[1:]) # without first
             if temp[0] != -1:
                 return temp
         if index == len(text):
@@ -745,9 +526,9 @@ def match_multiword_f(index, words):
                 if word_or_tag == "INT": # if looking for a intensifiers
                     i = 1
                     while index + i < len(text) and text[index + i][0] not in sent_punct:
-                        intensifier = find_intensifier(index + i - 1)
+                        intensifier = find_intensifier(text, index + i - 1)
                         if intensifier and intensifier[0] == i:
-                                result = match_multiword_f(index + i, words[1:])
+                                result = match_multiword_f(text, index + i, words[1:])
                                 if result[0] != -1:
                                     return [result[0] + i, intensifier[1]]
                         i += 1
@@ -757,20 +538,20 @@ def match_multiword_f(index, words):
             return [-1, 0]
         else:
             if current[0] == "*":
-                temp = match_multiword_f(index + 1, words)
+                temp = match_multiword_f(text, index + 1, words)
             elif current[0] == "+":
-                temp = match_multiword_f(index + 1, [["*", current[1]]] + words[1:])
+                temp = match_multiword_f(text, index + 1, [["*", current[1]]] + words[1:])
             elif current[0] == "?":
-                temp = match_multiword_f(index + 1, words[1:])
+                temp = match_multiword_f(text, index + 1, words[1:])
             else:
-                temp = match_multiword_f(index + 1, [[str(int(current[0]) - 1), current[1]]] + words[1:])
+                temp = match_multiword_f(text, index + 1, [[str(int(current[0]) - 1), current[1]]] + words[1:])
             if temp[0] == -1:
                 return temp #failed
             else:
                 return [temp[0] + 1, temp[1]] #success
 
 
-def match_multiword_b(index, words):
+def match_multiword_b(text, index, words):
 ### same as match_multiword_f, except it looks in the other direction
     if len (words) == 0:
         return [0, 0]
@@ -779,9 +560,9 @@ def match_multiword_b(index, words):
         if not isinstance(current,list):
             current = [1, [current]]
         if current[0] == "0":
-            return match_multiword_b(index, words[:-1])
+            return match_multiword_b(text, index, words[:-1])
         if current[0] == "*" or current[0] == "?":
-            temp = match_multiword_b(index, words[:-1])
+            temp = match_multiword_b(text, index, words[:-1])
             if temp[0] != -1:
                 return temp
         if index == -1:
@@ -792,10 +573,10 @@ def match_multiword_b(index, words):
                 match = match or get_word(text[index]).lower() == word_or_tag
             elif word_or_tag.isupper():
                 if word_or_tag == "INT":
-                    intensifier = find_intensifier(index)
+                    intensifier = find_intensifier(text, index)
                     if intensifier:
                         i = intensifier[0]
-                        result = match_multiword_b(index  - i, words[:-1])
+                        result = match_multiword_b(text, index  - i, words[:-1])
                         if result[0] != -1:
                             return [result[0] + i, intensifier[1]]
                 else:
@@ -804,20 +585,20 @@ def match_multiword_b(index, words):
             return [-1, 0]
         else:
             if current[0] == "*":
-                temp = match_multiword_b(index - 1, words)
+                temp = match_multiword_b(text, index - 1, words)
             elif current[0] == "+":
-                temp = match_multiword_b(index - 1, words[:-1] + [["*", current[1]]])
+                temp = match_multiword_b(text, index - 1, words[:-1] + [["*", current[1]]])
             elif current[0] == "?":
-                temp = match_multiword_b(index - 1, words[:-1])
+                temp = match_multiword_b(text, index - 1, words[:-1])
             else:
-                temp = match_multiword_b(index - 1, words[:-1] + [[str(int(current[0]) - 1), current[1]]])
+                temp = match_multiword_b(text, index - 1, words[:-1] + [[str(int(current[0]) - 1), current[1]]])
             if temp[0] == -1:
                 return temp
             else:
                 return [temp[0] + 1, temp[1]]
 
 
-def find_multiword(index, dict_entry_list):
+def find_multiword(text, index, dict_entry_list):
 ### this function determines whether the words surrounding the key word at
 ### index match one of the dictionary definitions in dict_entry_list. If so,
 ### it returns a list containing the SO value, the number of words in the phrase,
@@ -830,13 +611,13 @@ def find_multiword(index, dict_entry_list):
         start = words.index("#")
         intensifier = 0
         if start < len(words) - 1:
-            (countforward, int_temp) = match_multiword_f(index + 1, words[start +1:])
+            (countforward, int_temp) = match_multiword_f(text, index + 1, words[start +1:])
             if int_temp != 0:
                 intensifier = int_temp
         else:
             countforward = 0
         if start > 0:
-            (countback, int_temp) = match_multiword_b(index - 1, words[:start])
+            (countback, int_temp) = match_multiword_b(text, index - 1, words[:start])
             if int_temp != 0:
                 intensifier = int_temp
         else:
@@ -848,7 +629,7 @@ def find_multiword(index, dict_entry_list):
             return [SO, countback, countforward, intensifier]
     return False
 
-def words_within_num(index, words_tags, num):
+def words_within_num(index, words_tags, num, text):
 ### check to see if something in words_tags is within num of index (including
 ### index), returns true if so
     while num > 0:
@@ -859,23 +640,7 @@ def words_within_num(index, words_tags, num):
     return False
 
 
-def get_sentence (index):
-### extracts the sentence (a string) that contains the given index, for searching
-    sent_start = index
-    sent_end = index + 1
-    while sent_start > 0 and sent_start not in boundaries:
-        sent_start -= 1
-    while sent_end < len(text) and sent_end not in boundaries:
-        sent_end += 1
-    return " ".join(map(get_word, text[sent_start : sent_end]))
-
-def get_sentence_no (index):
-### returns the sentence number, based on the orignal text newlines
-    while index not in boundaries:
-        index += 1
-    return boundaries.index(index)
-
-def get_sent_punct (index):
+def get_sent_punct (index, text):
 ### get the next sentence punctuation (e.g. ?, !, or .) after the given index
     while text[index][0] not in sent_punct:
         if index == len(text) - 1: #if the end of the text is reached
@@ -883,7 +648,7 @@ def get_sent_punct (index):
         index += 1
     return get_word(text[index])
 
-def at_boundary (index):
+def at_boundary (index, text, boundaries):
     if index +1 in boundaries:
         return True
     elif use_boundary_punct and get_word(text[index]) in punct:
@@ -894,11 +659,11 @@ def at_boundary (index):
         return False
 
 
-def has_sent_irrealis(index):
+def has_sent_irrealis(index, text, boundaries):
 ### Returns true if there is a irrealis marker in the sentence and no
 ### punctuation or boundary word intervenes between the marker and the index
-    if not (use_definite_assertion and words_within_num(index, definites, 1)):
-        while index != -1 and not at_boundary(index):
+    if not (use_definite_assertion and words_within_num(index, definites, 1, text)):
+        while index != -1 and not at_boundary(index, text, boundaries):
             if get_word(text[index]).lower() in irrealis:
                 return True
             if language == "Spanish":
@@ -908,10 +673,10 @@ def has_sent_irrealis(index):
             index -= 1
     return False
 
-def get_sent_highlighter(index):
+def get_sent_highlighter(index, text, boundaries):
 ### If there is a word in the sentence prior to the index but before a boundary
 ### marker (including a boundary marker) in the highlighter list, return it
-    while index != -1 and not at_boundary(index):
+    while index != -1 and not at_boundary(index, text, boundaries):
         if get_word(text[index]).lower() in highlighters:
             return get_word(text[index]).lower()
         else:
@@ -919,14 +684,14 @@ def get_sent_highlighter(index):
     return False
 
 
-def find_negation(index, word_type):
+def find_negation(index, word_type, text, boundaries):
 ### looks backwards for a negator and returns its index if one is found and
 ### there is no intervening puctuation or boundary word. If restricted negation
 ### is used (for the given word type), the search will only continue if each
 ### word or its tag is in the skipped list for its type
     search = True
     found = -1
-    while search and not at_boundary(index) and index != -1:
+    while search and not at_boundary(index, text, boundaries) and index != -1:
         current = get_word(text[index]).lower()
         if current in negators:
             search = False
@@ -936,7 +701,7 @@ def find_negation(index, word_type):
         index -= 1
     return found
 
-def is_blocker(SO, index):
+def is_blocker(SO, index, text):
     if index > -1 and index < len(text) and len(text[index]) == 2:
         (modifier, tag) = text[index]
         if tag == adv_tag and modifier in adv_dict and abs(adv_dict[modifier]) >= blocker_cutoff:
@@ -950,15 +715,15 @@ def is_blocker(SO, index):
                 return True
 
 
-def find_blocker(SO, index, POS):
+def find_blocker(SO, index, POS, text, boundaries):
 ### this function tests if the item at index is of the correct type, orientation
 ### and strength (as determined by blocker_cutoff) to nullify a word having the
 ### given SO value
     stop = False
-    while index > 0 and not stop and not at_boundary(index):
+    while index > 0 and not stop and not at_boundary(index, text, boundaries):
         if len (text[index-1]) == 2:
             (modifier, tag) = text[index-1]
-            if is_blocker(SO, index-1):
+            if is_blocker(SO, index-1, text):
                 return True
             if not modifier in skipped[POS] and not tag[:2] in skipped[POS]:
                 stop = True
@@ -966,31 +731,34 @@ def find_blocker(SO, index, POS):
     return False
 
 
-def find_VP_boundary (index):
+def find_VP_boundary (index, text, boundaries):
 ### forward search for the index immediately preceding punctuation or a boundary
 ### word or punctuation. Used to find intensifiers remote from the verb
-    while not at_boundary(index) and index < len(text) - 1:
+    while not at_boundary(index, text, boundaries) and index < len(text) - 1:
         index += 1
     return index
 
-def is_in_predicate (index):
+def is_in_predicate (index, text, boundaries):
 ### backwards search for a verb of any kind. Used to determine if a comparative
 ### or superlative adjective is in the predicate
-    while not at_boundary(index) and index > 0:
+    while not at_boundary(index, text, boundaries) and index > 0:
         index -= 1
         tag = get_tag(text[index])
-        if (language == "English" and tag[:2] == "VB" or tag in ["AUX", "AUXG"]) or (language == "Spanish" and tag[0] == "V"):
+        if ((language == "English"
+            and tag[:2] == "VB"
+            or tag in ["AUX", "AUXG"]) or (language == "Spanish" and tag[0] == "V")):
             return True
     return False
 
-def is_in_imperative (index):
+def is_in_imperative (index, text, boundaries):
 ### Tries to determine if the word at index is in an imperative based on whether
 ### first word in the clause is a VBP (and not a question or within the
 ### scope of a definite determiner)
-    if get_sent_punct(index) != "?" and not (words_within_num(index, definites, 1)):
+    if get_sent_punct(index, text) != "?" and not (
+            words_within_num(index, definites, 1, text)):
         i = index
         while i > -1 and get_word(text[i]) not in sent_punct:
-            if at_boundary(index):
+            if at_boundary(index, text, boundaries):
                 return False
             i -=1
         (word, tag) = text[i+1]
@@ -998,7 +766,7 @@ def is_in_imperative (index):
             return True
     return False
 
-def is_in_quotes (index):
+def is_in_quotes (index, text):
 ### check to see if a particular word is contained within quotation marks.
 ### looks to a sentence boundary on the left, and one past the sentence
 ### boundary on the right; an item in quotes should have an odd number of
@@ -1029,7 +797,7 @@ def is_in_quotes (index):
 
 
 
-def apply_other_modifiers (SO, index, leftedge):
+def apply_other_modifiers (SO, index, leftedge, text, boundaries):
 ### several modifiers that apply equally to all parts of speech based on
 ### their context. Words in all caps, in a sentences ending with an
 ### exclamation mark, or with some other highlighter are intensified,
@@ -1039,29 +807,29 @@ def apply_other_modifiers (SO, index, leftedge):
         if  use_cap_int and get_word(text[index]).isupper():
             output.append("X " + str(capital_modifier) +  " (CAPITALIZED)")
             SO *= capital_modifier
-        if  use_exclam_int and get_sent_punct(index) == "!":
+        if  use_exclam_int and get_sent_punct(index, text) == "!":
             output.append("X " + str(exclam_modifier) + " (EXCLAMATION)")
             SO *= exclam_modifier
         if  use_highlighters:
-            highlighter = get_sent_highlighter(leftedge)
+            highlighter = get_sent_highlighter(leftedge, text, boundaries)
             if highlighter:
                 output.append("X " + str(highlighters[highlighter]) + " (HIGHLIGHTED)")
                 SO *= highlighters[highlighter]
-        if use_quest_mod and get_sent_punct(index) == "?" and not (use_definite_assertion and words_within_num(leftedge, definites, 1)):
+        if use_quest_mod and get_sent_punct(index, text) == "?" and not (use_definite_assertion and words_within_num(leftedge, definites, 1, text)):
             output.append("X 0 (QUESTION)")
             SO = 0
-        if language == "English" and use_imperative and is_in_imperative(leftedge):
+        if language == "English" and use_imperative and is_in_imperative(leftedge, text, boundaries):
             output.append("X 0 (IMPERATIVE)")
             SO = 0
-        if use_quote_mod and is_in_quotes(index):
+        if use_quote_mod and is_in_quotes(index, text):
             output.append("X 0 (QUOTES)")
             SO = 0
-        if  use_irrealis and has_sent_irrealis(leftedge):
+        if  use_irrealis and has_sent_irrealis(leftedge, text, boundaries):
             output.append ("X 0 (IRREALIS)")
             SO = 0
         return [SO, output]
 
-def fix_all_caps_English():
+def fix_all_caps_English(text):
 ### tagger tags most all uppercase words as NNP, this function tries to see if
 ### they belong in another dictionary (if so, it changes the tag)
     for i in range(0, len(text)):
@@ -1088,7 +856,7 @@ def fix_all_caps_English():
                     if word in verb_dict or word in c_verb_dict:
                         text[i][1] = "VB" + ex_tag
 
-def fix_all_caps_Spanish():
+def fix_all_caps_Spanish(text):
 ### tagger tags most all uppercase words as NP, this function tries to see if
 ### they belong in another dictionary (if so, it changes the tag)
     for i in range(0, len(text)):
@@ -1104,41 +872,27 @@ def fix_all_caps_Spanish():
                     if alt_word in adj_dict:
                         text[i][1] == "RG"
 
-def fix_all_caps():
-    if language == "English":
-        fix_all_caps_English()
-    elif language == "Spanish":
-        fix_all_caps_Spanish()
+def fix_all_caps(config, text):
+    if config["language"] == "English":
+        fix_all_caps_English(text)
+    elif config["language"] == "Spanish":
+        fix_all_caps_Spanish(text)
 
 
-def apply_weights (word_SO, index):
+def apply_weights (word_SO, index, weights):
 ### this is the last step in the calculation, external weights and negation
 ### weights are applied
     if use_heavy_negation and word_SO < 0: # weighing of negative SO
         word_SO *= neg_multiplier          # items
-        if output_calculations:
-            richout.write(" X " + str(neg_multiplier) + " (NEGATIVE)")
     word_SO *= weights[index] # apply weights
-    if weights[index] != 1:
-        if output_calculations:
-            richout.write (" X " + str(weights[index]) + " (WEIGHTED)")
-    if output_calculations:
-        richout.write (" = " + str(word_SO) + "\n")
     return word_SO
 
-def apply_weights_adv (word_SO, index, output):
+def apply_weights_adv (word_SO, index, output, weights):
 ### this is the last step in the calculation, external weights and negation
 ### weights are applied
     if use_heavy_negation and word_SO < 0: # weighing of negative SO
         word_SO *= neg_multiplier          # items
-        if output_calculations:
-            output += " X " + str(neg_multiplier) + " (NEGATIVE)"
     word_SO *= weights[index] # apply weights
-    if weights[index] != 1:
-        if output_calculations:
-            output += " X " + str(weights[index]) + " (WEIGHTED)"
-    if output_calculations:
-        output += (" = " + str(word_SO) + "\n")
     return [word_SO, output]
 
 
@@ -1155,7 +909,7 @@ def apply_weights_adv (word_SO, index, output):
 ###
 ### differences that are particular to certain parts of speech are noted below
 
-def get_noun_SO(index):
+def get_noun_SO(text, index, boundaries, word_counts):
     NN = get_word(text[index])
     original_NN = NN
     if NN.isupper():
@@ -1165,7 +919,7 @@ def get_noun_SO(index):
     ntype = get_tag(text[index])[2:]
     NN = stem_noun(NN)
     if NN in c_noun_dict:
-        multiword_result = find_multiword(index, c_noun_dict[NN])
+        multiword_result = find_multiword(text, index, c_noun_dict[NN])
     else:
         multiword_result = False
     if NN not in noun_dict and not multiword_result:
@@ -1182,19 +936,19 @@ def get_noun_SO(index):
             i = index - 1
         if use_intensifiers:
             if language == "Spanish": # look for post-nominal adj
-                intensifier = find_intensifier(index +1) # look for post-nominal adj
+                intensifier = find_intensifier(text, index +1) # look for post-nominal adj
                 if intensifier:
                     int_modifier += intensifier[1]
                     text[index + 1][1] = "MOD"
                     output += [get_word(text[index+1])]
-            intensifier = find_intensifier(i)
+            intensifier = find_intensifier(text, i)
             if intensifier:
                 int_modifier = intensifier[1]
                 for j in range (0, intensifier[0]):
                     text[i][1] = "MOD" # block modifier being used twice
                     i -= 1
                 output = list(map(get_word, text[i + 1:i + intensifier[0] + 1])) + output
-        negation = find_negation(i, noun_tag)
+        negation = find_negation(i, noun_tag, text, boundaries)
         if negation != -1:
             output = list(map(get_word, text[negation:i+1])) + output
             if use_intensifiers:
@@ -1203,7 +957,7 @@ def get_noun_SO(index):
                 if language == "English":
                     while text[i][0] in skipped[adj_tag]:
                         i -= 1
-                intensifier = find_intensifier(i)
+                intensifier = find_intensifier(text, i)
                 if intensifier:
                     int_modifier_negex = intensifier[1]
                     for j in range (0, intensifier[0]):
@@ -1214,7 +968,7 @@ def get_noun_SO(index):
         if int_modifier != 0:
             noun_SO = noun_SO *(1+int_modifier)
             output.append("X " + str(1 + int_modifier) + " (INTENSIFIED)")
-        elif use_blocking and find_blocker(noun_SO, index, noun_tag):
+        elif use_blocking and find_blocker(noun_SO, index, noun_tag, text, boundaries):
             output.append("X 0 (BLOCKED)")
             noun_SO = 0
         if use_negation and negation != -1:
@@ -1234,7 +988,7 @@ def get_noun_SO(index):
             if use_intensifiers and int_modifier_negex != 0:
                 noun_SO *=(1+int_modifier_negex)
                 output.append("X " + str(1 + int_modifier_negex) + " (INTENSIFIED)")
-        (noun_SO, new_out) = apply_other_modifiers(noun_SO, index, i)
+        (noun_SO, new_out) = apply_other_modifiers(noun_SO, index, i, text, boundaries)
         output += new_out
         if noun_SO != 0:
             if int_modifier != 0 and int_multiplier != 1:
@@ -1254,14 +1008,9 @@ def get_noun_SO(index):
         if noun_multiplier != 1:
             noun_SO *= noun_multiplier
             output.append("X " + str(noun_multiplier) + " (NOUN)")
-        if output_calculations:
-            for word in output:
-                richout.write(word + " ")
-        if output_calculations and noun_SO == 0:
-            richout.write("= 0\n")
         return noun_SO
 
-def get_verb_SO(index):
+def get_verb_SO(text, index, boundaries, word_counts):
 ### Verbs are special because their adverbal modifiers are not necessarily
 ### adjecent to the verb; a special search is done for clause
 ### final modifiers
@@ -1275,7 +1024,7 @@ def get_verb_SO(index):
         vtype = get_tag(text[index])[2:]
         VB = stem_VB(VB, vtype)
     if VB in c_verb_dict:
-        multiword_result = find_multiword(index, c_verb_dict[VB])
+        multiword_result = find_multiword(text, index, c_verb_dict[VB])
     else:
         multiword_result = False
     if VB in not_wanted_verb:
@@ -1293,7 +1042,7 @@ def get_verb_SO(index):
             verb_SO = verb_dict[VB]
             i = index - 1
         if use_intensifiers:
-            intensifier = find_intensifier(i)
+            intensifier = find_intensifier(text, i)
             if intensifier:
                 int_modifier += intensifier[1]
                 for j in range (0, intensifier[0]):
@@ -1301,14 +1050,14 @@ def get_verb_SO(index):
                     i -= 1
                 output = list(map(get_word, text[i + 1:i + intensifier[0] + 1])) + output
             if use_clause_final_int: # look for clause-final modifier
-                edge = find_VP_boundary(index)
-                intensifier = find_intensifier(edge - 1)
+                edge = find_VP_boundary(index, text, boundaries)
+                intensifier = find_intensifier(text, edge - 1)
                 if intensifier:
                     int_modifier = intensifier[1]
                     for j in range (0, intensifier[0]):
                         text[edge - 1 - j][1] = "MOD"
                     output = output + list(map(get_word, text[index + 1: edge]))
-        negation = find_negation(i, verb_tag)
+        negation = find_negation(i, verb_tag, text, boundaries)
         if negation != -1:
             output = list(map(get_word, text[negation:i+1])) + output
             if use_intensifiers:
@@ -1317,7 +1066,7 @@ def get_verb_SO(index):
                 if language == "English":
                     while text[i][0] in skipped["JJ"]:
                         i -= 1
-                intensifier = find_intensifier(i)
+                intensifier = find_intensifier(text, i)
                 if intensifier:
                     int_modifier_negex = intensifier[1]
                     for j in range (0, intensifier[0]):
@@ -1328,7 +1077,7 @@ def get_verb_SO(index):
         if int_modifier != 0:
             verb_SO = verb_SO *(1+int_modifier)
             output.append("X " + str(1 + int_modifier) + " (INTENSIFIED)")
-        elif use_blocking and find_blocker(verb_SO, index, verb_tag):
+        elif use_blocking and find_blocker(verb_SO, index, verb_tag, text, boundaries):
             output.append("X 0 (BLOCKED)")
             verb_SO = 0
         if use_negation and negation != -1:
@@ -1348,7 +1097,7 @@ def get_verb_SO(index):
             if use_intensifiers and int_modifier_negex != 0:
                 verb_SO *=(1+int_modifier_negex)
                 output.append("X " + str(1 + int_modifier_negex) + " (INTENSIFIED)")
-        (verb_SO, new_out) = apply_other_modifiers(verb_SO, index, i)
+        (verb_SO, new_out) = apply_other_modifiers(verb_SO, index, i, text, boundaries)
         output += new_out
         if verb_SO != 0:
             if int_modifier != 0 and int_multiplier != 1:
@@ -1368,14 +1117,9 @@ def get_verb_SO(index):
         if verb_multiplier != 1:
             verb_SO *= verb_multiplier
             output.append("X " + str(verb_multiplier) + " (VERB)")
-        if output_calculations:
-            for word in output:
-                richout.write(word + " ")
-        if output_calculations and verb_SO == 0:
-            richout.write("= 0\n") # calculation is over
         return verb_SO
 
-def get_adj_SO(index):
+def get_adj_SO(text, index, boundaries, word_counts):
 ### Comparative and superlative adjectives require special stemming, and are
 ### treated as if they have been intensified with "more" or "most". Non-
 ### predicative uses of this kind of adjective are often not intended to
@@ -1415,12 +1159,12 @@ def get_adj_SO(index):
                 JJ = new_JJ
                 int_modifier += 1
     if JJ in c_adj_dict:
-        multiword_result = find_multiword(index, c_adj_dict[JJ])
+        multiword_result = find_multiword(text, index, c_adj_dict[JJ])
     else:
         multiword_result = False
     if JJ in not_wanted_adj:
         return 0
-    elif language == "English" and ((adjtype == "S" or get_word(text[index-1]) in superlatives) and (not words_within_num(index, definites, 2) or not is_in_predicate(index)) or ((adjtype == "R" or get_word(text[index -1]) in comparatives) and not is_in_predicate(index))):
+    elif language == "English" and ((adjtype == "S" or get_word(text[index-1]) in superlatives) and (not words_within_num(index, definites, 2, text) or not is_in_predicate(index, text, boundaries)) or ((adjtype == "R" or get_word(text[index -1]) in comparatives) and not is_in_predicate(index, text, boundaries))):
         return 0        # superlatives must be preceded by a definite and be in the predicate         # comparatives must be in the predicate
     elif JJ not in adj_dict and not multiword_result:
         return 0
@@ -1438,14 +1182,14 @@ def get_adj_SO(index):
         if use_intensifiers:
             intensifier = 1
             while intensifier: # keep looking for instensifiers until no more
-                intensifier = find_intensifier(i)           # are found
+                intensifier = find_intensifier(text, i)           # are found
                 if intensifier:
                     int_modifier += intensifier[1]
                     for j in range (0, intensifier[0]):
                         text[i][1] = "MOD" # block modifier being used twice
                         i -= 1
                     output = list(map(get_word, text[i + 1:i + intensifier[0] + 1])) + output
-        negation = find_negation(i, adj_tag)
+        negation = find_negation(i, adj_tag, text, boundaries)
         if negation != -1:
             output = list(map(get_word, text[negation:i+1])) + output
             if use_intensifiers:
@@ -1454,7 +1198,7 @@ def get_adj_SO(index):
                 if language == "English":
                     while text[i][0] in skipped["JJ"]:
                         i -= 1
-                intensifier = find_intensifier(i)
+                intensifier = find_intensifier(text, i)
                 if intensifier:
                     int_modifier_negex = intensifier[1]
                     for j in range (0, intensifier[0]):
@@ -1471,7 +1215,7 @@ def get_adj_SO(index):
                 output.append("(SUPERLATIVE)")
             elif (language == "Spanish" and (get_word(text[index-1]) in comparatives and get_tag(text[index-2]) == "DA")or (JJ in ["mejor","p"+chr(233) + "simo"] and get_tag(text[index-2]) == "DA")):
                 output.append("(SUPERLATIVE)")
-        elif use_blocking and find_blocker(adj_SO, index, adj_tag):
+        elif use_blocking and find_blocker(adj_SO, index, adj_tag, text, boundaries):
             output.append("X 0 (BLOCKED)")
             adj_SO = 0
         if use_negation and negation != -1:
@@ -1491,7 +1235,7 @@ def get_adj_SO(index):
             if use_intensifiers and int_modifier_negex != 0:
                 adj_SO *=(1+int_modifier_negex)
                 output.append("X " + str(1 + int_modifier_negex) + " (INTENSIFIED)")
-        (adj_SO, new_out) = apply_other_modifiers(adj_SO, index, i)
+        (adj_SO, new_out) = apply_other_modifiers(adj_SO, index, i, text, boundaries)
         output += new_out
         if int_modifier != 0 and int_multiplier != 1:
             adj_SO *= int_multiplier
@@ -1510,14 +1254,9 @@ def get_adj_SO(index):
         if adj_multiplier != 1:
             adj_SO *= adj_multiplier
             output.append("X " + str(adj_multiplier) + " (ADJECTIVE)")
-        if output_calculations:
-            for word in output:
-                richout.write(word + " ")
-        if output_calculations and adj_SO == 0:
-            richout.write("= 0\n") # calculation is over
         return adj_SO
 
-def get_adv_SO(index):
+def get_adv_SO(text, index, boundaries, word_counts):
 ### There are two special things to note about dealing with adverbs: one is that
 ### their SO value can be derived automatically from the lemma in the
 ### adjective dictionary. The other is the special handling of "too", which
@@ -1535,7 +1274,7 @@ def get_adv_SO(index):
             adv_dict[RB] = adj_dict[JJ] # take its SO value
             new_adv_dict[RB] = adj_dict[JJ]
     if RB in c_adv_dict:
-        multiword_result = find_multiword(index, c_adv_dict[RB])
+        multiword_result = find_multiword(text, index, c_adv_dict[RB])
     else:
         multiword_result = False
     if RB in not_wanted_adv or (language == "English" and (RB == "too" and index < len(text) - 1 and get_word(text[index + 1]) in punct) or (RB == "well" and index < len(text) - 1 and get_word(text[index + 1]) == ",")):
@@ -1555,14 +1294,14 @@ def get_adv_SO(index):
         if (language == "English" and get_word(text[i]) == "as") or (language == "Spanish" and get_word(text[i]) == "tan"): # look past "as" for intensification
             i -= 1
         if use_intensifiers:
-            intensifier = find_intensifier(i)
+            intensifier = find_intensifier(text, i)
             if intensifier:
                 int_modifier += intensifier[1]
                 for j in range (0, intensifier[0]):
                     text[i][1] = "MOD" # block modifier being used twice
                     i -= 1
                 output = list(map(get_word, text[i + 1:i + intensifier[0] + 1])) + output
-        negation = find_negation(i, adv_tag)
+        negation = find_negation(i, adv_tag, text, boundaries)
         if negation != -1:
             output = list(map(get_word, text[negation:i+1])) + output
             if use_intensifiers:
@@ -1571,7 +1310,7 @@ def get_adv_SO(index):
                 if language == "English":
                     while text[i][0] in skipped["JJ"]:
                         i -= 1
-                intensifier = find_intensifier(i)
+                intensifier = find_intensifier(text, i)
                 if intensifier:
                     int_modifier_negex = intensifier[1]
                     for j in range (0, intensifier[0]):
@@ -1582,7 +1321,7 @@ def get_adv_SO(index):
         if int_modifier != 0:
             adv_SO = adv_SO *(1+int_modifier)
             output.append("X " + str(1 + int_modifier) + " (INTENSIFIED)")
-        elif use_blocking and find_blocker(adv_SO, index, adv_tag):
+        elif use_blocking and find_blocker(adv_SO, index, adv_tag, text, boundaries):
             output.append("X 0 (BLOCKED)")
             adv_SO = 0
         if use_negation and negation != -1:
@@ -1602,7 +1341,7 @@ def get_adv_SO(index):
             if use_intensifiers and int_modifier_negex != 0:
                 adv_SO *=(1+int_modifier_negex)
                 output.append("X " + str(1 + int_modifier_negex) + " (INTENSIFIED)")
-        (adv_SO, new_out) = apply_other_modifiers(adv_SO, index, i)
+        (adv_SO, new_out) = apply_other_modifiers(adv_SO, index, i, text, boundaries)
         output += new_out
         if adv_SO != 0:
             if int_modifier != 0 and int_multiplier != 1:
@@ -1623,13 +1362,216 @@ def get_adv_SO(index):
             adv_SO *= adv_multiplier
             output.append("X " + str(adv_multiplier) + " (ADVERB)")
         full_output = ""
-        if output_calculations:
-            for word in output:
-                full_output += word + " "
-        if output_calculations and adv_SO == 0:
-            full_output += ("= 0\n") # calucation is over
         return [adv_SO, full_output]
 
+
+def compute_polarity_scores(scores: dict, so: SO) -> dict:
+    if not scores:
+        scores = {}
+    Z_pos_neg = (so.pos_weight + so.neg_weight) or 1.
+    pos_score = so.pos_weight / Z_pos_neg
+    neg_score = so.neg_weight / Z_pos_neg
+    neut_score = so.neut_cnt / (so.ttl_cnt or 1.)
+    Z = float(pos_score + neg_score + neut_score)
+    scores["socal"] = [neg_score/Z, neut_score/Z, pos_score/Z]
+    return scores
+
+
+def process_doc(doc, config):
+    word_counts = [{},{},{},{}]
+    text = [[t["form"], t["tag"]] for t in doc["toks"]]
+    weights = [1.] * len(text)
+    t_idx2edu_idx = {t_i: edu_i
+                     for edu_i, edu in enumerate(doc["edus"])
+                     for t_i in edu["toks"]}
+    boundaries = {edu["toks"][-1] for edu in doc["edus"]}
+
+    text_SO = SO() # a sum of the SO value of all the words in the text
+    edu_SO = defaultdict(SO)
+    if config["fix_cap_tags"]:
+        fix_all_caps(config, text)
+    for i, (word, tag) in enumerate(text):
+        word_SO = 0
+        weight_func = apply_weights
+        if tag[:2] == noun_tag:
+            word_SO = get_noun_SO(text, i, boundaries, word_counts)
+        elif tag[:2] == verb_tag:
+            word_SO = get_verb_SO(text, i, boundaries, word_counts)
+        elif tag[:2] == adj_tag:
+            word_SO = get_adj_SO(text, i, boundaries, word_counts)
+        elif tag[:2] == adv_tag:
+            word_SO, _ = get_adv_SO(text, i, boundaries, word_counts)
+            weight_func = apply_weights
+
+        edu_idx = t_idx2edu_idx[i]
+        if word_SO != 0:
+            word_SO = weight_func(word_SO, i, weights)
+            text_SO.add(word_SO)
+            edu_SO[edu_idx].add(word_SO)
+        else:
+            text_SO.neut_cnt += 1
+            edu_SO[edu_idx].neut_cnt += 1
+        text_SO.ttl_cnt += 1
+        edu_SO[edu_idx].ttl_cnt += 1
+    # add polarity scores to document and edus
+    doc["polarity_scores"] = compute_polarity_scores(
+        doc.get("polarity_scores"), text_SO
+    )
+    for i, edu_i in enumerate(doc["edus"]):
+        edu_i["polarity_scores"] = compute_polarity_scores(
+            edu_i.get("polarity_scores"), edu_SO[i]
+        )
+
+
+##################################################################
+# Main
+args = get_command_arguments()
+config = get_config_from_file(args.config)
+
+language = config["language"]
+use_adjectives = config["use_adjectives"]
+use_nouns = config["use_nouns"]
+use_verbs = config["use_verbs"]
+use_adverbs = config["use_adverbs"]
+use_intensifiers = config["use_intensifiers"]
+use_negation = config["use_negation"]
+use_comparatives = config["use_comparatives"]
+use_superlatives = config["use_superlatives"]
+use_multiword_dictionaries = config["use_multiword_dictionaries"]
+use_extra_dict = config["use_extra_dict"]
+use_XML_weighing = config["use_XML_weighing"]
+use_weight_by_location = config["use_weight_by_location"]
+use_irrealis = config["use_irrealis"]
+use_subjunctive = config["use_subjunctive"]
+use_imperative = config["use_imperative"]
+use_conditional = config["use_conditional"]
+use_highlighters = config["use_highlighters"]
+use_cap_int = config["use_cap_int"]
+use_exclam_int = config["use_exclam_int"]
+use_quest_mod = config["use_quest_mod"]
+use_quote_mod = config["use_quote_mod"]
+use_definite_assertion = config["use_definite_assertion"]
+use_clause_final_int = config["use_clause_final_int"]
+use_heavy_negation = config["use_heavy_negation"]
+use_word_counts_lower = config["use_word_counts_lower"]
+use_word_counts_block = config["use_word_counts_block"]
+use_blocking = config["use_blocking"]
+adv_learning = config["adv_learning"]
+limit_shift = config["limit_shift"]
+neg_negation_nullification = config["neg_negation_nullification"]
+polarity_switch_neg = config["polarity_switch_neg"]
+restricted_neg = config["restricted_neg"]
+simple_SO = config["simple_SO"]
+use_boundary_words = config["use_boundary_words"]
+use_boundary_punct = config["use_boundary_punctuation"]
+
+### Modifiers ###
+
+adj_multiplier = config["adj_multiplier"]
+adv_multiplier = config["adv_multiplier"]
+verb_multiplier = config["verb_multiplier"]
+noun_multiplier = config["noun_multiplier"]
+int_multiplier = config["int_multiplier"]
+neg_multiplier = config["neg_multiplier"]
+capital_modifier = config["capital_modifier"]
+exclam_modifier = config["exclam_modifier"]
+verb_neg_shift = config["verb_neg_shift"]
+noun_neg_shift = config["noun_neg_shift"]
+adj_neg_shift = config["adj_neg_shift"]
+adv_neg_shift = config["adv_neg_shift"]
+blocker_cutoff = config["blocker_cutoff"]
+
+### Dictionaries ###
+
+dic_dir = os.path.abspath(
+    os.path.join(
+        os.path.dirname(args.config),
+        config["dic_dir"]
+    )
+)
+adj_dict_path = os.path.join(dic_dir, config["adj_dict"])
+adv_dict_path = os.path.join(dic_dir, config["adv_dict"])
+noun_dict_path = os.path.join(dic_dir, config["noun_dict"])
+verb_dict_path = os.path.join(dic_dir, config["verb_dict"])
+int_dict_path = os.path.join(dic_dir, config["int_dict"])
+if use_extra_dict and config["extra_dict"]:
+    extra_dict_path = os.path.join(dic_dir, config["extra_dict"])
+else:
+    extra_dict_path = False
+adj_dict = {} # simple (single-word) dictionaries
+adv_dict = {}
+noun_dict = {}
+verb_dict = {}
+int_dict = {}
+c_adj_dict = {} # complex (multi-word) dictionaries
+c_adv_dict = {}
+c_noun_dict = {}
+c_verb_dict = {}
+c_int_dict = {}
+new_adv_dict = {}
+
+### Text ###
+
+### Internal Word lists ###
+if language == "English":
+    not_wanted_adj = ["other", "same", "such", "first", "next", "last", "few", "many", "less", "more", "least", "most"]
+    not_wanted_adv = [ "really", "especially", "apparently", "actually", "evidently", "suddenly", "completely","honestly", "basically", "probably", "seemingly", "nearly", "highly", "exactly", "equally", "literally", "definitely", "practically", "obviously", "immediately", "intentionally", "usually", "particularly", "shortly", "clearly", "mildly", "sincerely", "accidentally", "eventually", "finally", "personally", "importantly", "specifically", "likely", "absolutely", "necessarily", "strongly", "relatively", "comparatively", "entirely", "possibly", "generally", "expressly", "ultimately", "originally", "initially", "virtually", "technically", "frankly", "seriously", "fairly",  "approximately", "critically", "continually", "certainly",  "regularly", "essentially", "lately", "explicitly", "right", "subtly",  "lastly", "vocally", "technologically", "firstly", "tally", "ideally", "specially", "humanly", "socially", "sexually", "preferably", "immediately", "legally", "hopefully", "largely", "frequently", "factually", "typically"]
+    not_wanted_verb = []
+    negators = ["not", "no", "n't", "neither", "nor", "nothing", "never", "none", "lack", "lacked", "lacking", "lacks", "missing", "without", "absence", "devoid"];
+    punct = [".", ",", ";", "!", "?", ":", ")", "(", "\"", "'", "-"]
+    sent_punct = [".", ";", "!", "?", ":", "\n", "\r"]
+    skipped = {"JJ": ["even", "to", "being", "be", "been", "is", "was", "'ve", "have", "had", "do", "did", "done", "of", "as", "DT", "PSP$"], "RB": ["VB", "VBZ", "VBP", "VBG"], "VB":["TO", "being", "been", "be"], "NN":["DT", "JJ", "NN", "of", "have", "has", "come", "with", "include"]}
+    comparatives = ["less", "more", "as"]
+    superlatives = ["most", "least"]
+    definites = ["the","this", "POS", "PRP$"]
+    noun_tag = "NN"
+    verb_tag = "VB"
+    adj_tag = "JJ"
+    adv_tag = "RB"
+    macro_replace = {"#NP?#": "[PDT]?_[DET|PRP|PRP$|NN|NNP]?_[POS]?_[NN|NNP|JJ]?_[NN|NNP|NNS|NNPS]?","#PER?#": "[me|us|her|him]?","#give#": "give|gave|given","#fall#": "fall|fell|fallen","#get#": "get|got|gotten","#come#": "come|came","#go#": "go|went|gone", "#show#": "show|shown","#make#": "make|made","#hang#": "hang|hung","#break#": "break|broke|broken", "#see#": "see|saw|seen", "#be#": "be|am|are|was|were|been", "#bring#": "bring|brought", "#think#" : "think|thought", "#have#": "has|have|had", "#blow#": "blow|blew", "#build#": "build|built", "#do#": "do|did|done", "#can#": "can|could", "#grow#":"grow|grew|grown", "#hang#": "hang|hung", "#run#": "run|ran", "#stand#": "stand|stood", "#string#": "string|strung", "#hold#" : "hold|held", "#take#" : "take|took|taken"}
+elif language == "Spanish":
+    not_wanted_adj = ["otro","mio","tuyo","suyo","nuestro","vuestro","mismo","primero","segundo","último"]
+    additional = []
+    for adj in not_wanted_adj:
+       additional += [adj[:-1] + "a",adj[:-2] + "os", adj[:-2] + "as"]
+    not_wanted_adj += additional
+    not_wanted_adv = ["básicamente", "claramente","ampliamente", "atentamente", "completamente"]
+    not_wanted_verb = ["haber", "estar"]
+    negators = ["no", "ni", "nunca", "jam"+ chr(225) + "s", "nada", "nadie", "ninguno", "ningunos", "ninguna", "ningunas", "faltar", "falta", "sin"];
+    punct = [".", ",", ";", "!", "?", ":", ")", "(", "\"", "'", "-", chr(161), chr(191)]
+    sent_punct = [".", ";", "!", "?", ":", "\n", "\r", chr(161), chr(191)]
+    skipped = {"AQ": [ "a", "estar", "haber", "hacer", "de", "como", "NC", "PP", "DP", "DD", "DI", "DA", "RG"], "RG": ["VM", "VA", "VS"], "VM":["haber", "estar", "PP"], "NC":["DP", "DD", "DI", "DA", "AQ", "AO", "de", "tener", "hacer", "estar", "con", "incluso"]}
+    comparatives = ["m" + chr(225) + "s", "menos", "como"]
+    definites = ["el", "la", "los", "las", "este", "esta","estos", "estas", "de", "DP"]
+    accents = {chr(237):"i", chr(243):"o", chr(250):"u", chr(233):"e", chr(225):"a",chr(241):"n"}
+    noun_tag = "NC"
+    verb_tag = "VM"
+    adj_tag = "AQ"
+    adv_tag = "RG"
+    macro_replace = {"#NP?#": "[DI|DP|DA]?_[AQ|AC]?_[NC|NP]?_[AQ]?"}
+
+weight_tags= config["weight_tags"]
+weights_by_location = config["weights_by_location"]
+highlighters = config["highlighters"]
+irrealis = config["irrealis"]
+boundary_words = config["boundary_words"]
+
+
+### Multi-word dictionary macros:
+### These macros allow for relatively simple and uncluttered multiword
+### dictionary definitions. The dictionary keys will be replaced by the
+### their corresponding values when they appear in definitions (in the
+### dictionary files). In particular, allows the forms of irregular verbs
+### to be listed only once (here, rather than in the dictionary)
+
+### Output ###
+output_unknown = config["output_unknown"]
+output_used = config["output_used"]
+output_used_lemma = config["output_used_lemma"]
+search = config["search"]
+contain_all_words = config["contain_all_words"]
+
+### Loading functions ###
 
  ### Main script ###
 
@@ -1641,158 +1583,11 @@ def get_adv_SO(index):
 
 
 load_dictionaries()
-fill_text_and_weights(infile)
 
-
-if output_sentences:
-    sentence_SO = {}
-
-adv_count = len(adv_dict) # for determining if there are new adverbs
-
-if output_calculations:
-    richout.write("######\n---------\n" + os.path.basename(args.input) + "\n---------\nText Length: " + str(len(text)) + "\n---------\n")
-
-if fix_cap_tags:
-    fix_all_caps()
-
-if use_nouns:
-    nouns_SO = 0
-    if output_calculations:
-        richout.write("Nouns:\n-----\n")
-    for index in range(0, len(text)):
-        if len(text[index]) == 2:
-            (word, tag) = text[index]
-            if tag[:2] == noun_tag:
-                word_SO = get_noun_SO(index)
-                if word_SO != 0:
-                    word_SO = apply_weights(word_SO, index)
-                    nouns_SO += word_SO
-                if output_sentences:
-                    sentence_no = get_sentence_no(index)
-                    if sentence_no not in sentence_SO:
-                        sentence_SO[sentence_no] = word_SO
-                    else:
-                        sentence_SO[sentence_no] += word_SO
-    noun_count = sum_word_counts(word_counts[0])
-    if noun_count > 0:
-        if output_calculations:
-            richout.write("-----\nAverage SO: " + str(nouns_SO/noun_count) + "\n-----\n")
-        text_SO += nouns_SO
-        SO_counter += noun_count
-    else:
-        if output_calculations:
-            richout.write("-----\nAverage SO: 0\n-----\n")
-
-
-if use_verbs:
-    if output_calculations:
-        richout.write("Verbs:\n-----\n")
-    verbs_SO = 0
-    for index in range(0, len(text)):
-        if len(text[index]) == 2:
-            (word, tag) = text[index]
-            if tag[:2] == verb_tag:
-                word_SO = get_verb_SO(index)
-                if word_SO != 0:
-                    word_SO = apply_weights(word_SO, index)
-                    verbs_SO += word_SO
-                if output_sentences:
-                    sentence_no = get_sentence_no(index)
-                    if sentence_no not in sentence_SO:
-                        sentence_SO[sentence_no] = word_SO
-                    else:
-                        sentence_SO[sentence_no] += word_SO
-    verb_count = sum_word_counts(word_counts[1])
-    if verb_count > 0:
-        if output_calculations:
-            richout.write("-----\nAverage SO: " + str(verbs_SO/verb_count) + "\n-----\n")
-        text_SO += verbs_SO
-        SO_counter += verb_count
-    else:
-        if output_calculations:
-            richout.write("-----\nAverage SO: 0\n-----\n")
-
-if use_adjectives:
-    adjs_SO = 0
-    if output_calculations:
-        richout.write("Adjectives:\n-----\n")
-    for index in range(0, len(text)):
-        if len(text[index]) == 2:
-            (word, tag) = text[index]
-            if tag[:2] == adj_tag:
-                word_SO = get_adj_SO(index)
-                if word_SO != 0:
-                    word_SO = apply_weights(word_SO, index)
-                    adjs_SO += word_SO
-                if output_sentences:
-                    sentence_no = get_sentence_no(index)
-                    if sentence_no not in sentence_SO:
-                        sentence_SO[sentence_no] = word_SO
-                    else:
-                        sentence_SO[sentence_no] += word_SO
-    adj_count = sum_word_counts(word_counts[2])
-    if adj_count > 0:
-        if output_calculations:
-            richout.write("-----\nAverage SO: " + str(adjs_SO/adj_count) + "\n-----\n")
-        text_SO += adjs_SO
-        SO_counter += adj_count
-    else:
-        if output_calculations:
-            richout.write("-----\nAverage SO: 0\n-----\n")
-
-adv_outputs = []
-if use_adverbs:
-    advs_SO = 0
-    if output_calculations:
-        richout.write("Adverbs:\n-----\n")
-    for index in range(len(text) - 1, -1, -1): # backwards iteration, since
-        if len(text[index]) == 2:
-            (word, tag) = text[index]             # adverbs modify adverbs
-            if tag[:2] == adv_tag:
-                (word_SO,output) = get_adv_SO(index)
-                if word_SO != 0:
-                    (word_SO,output) = apply_weights_adv(word_SO, index, output)
-                    advs_SO += word_SO
-                    adv_outputs.insert(0,output)
-                if output_sentences:
-                    sentence_no = get_sentence_no(index)
-                    if sentence_no not in sentence_SO:
-                        sentence_SO[sentence_no] = word_SO
-                    else:
-                        sentence_SO[sentence_no] += word_SO
-        adv_count = sum_word_counts(word_counts[3])
-    for output in adv_outputs:
-        richout.write(output)
-    if adv_count > 0:
-        if output_calculations:
-            richout.write("-----\nAverage SO: " + str(advs_SO/adv_count) + "\n-----\n")
-        text_SO += advs_SO
-        SO_counter += adv_count
-    else:
-        if output_calculations:
-            richout.write("-----\nAverage SO: 0\n-----\n")
-
-
-if SO_counter > 0:
-    text_SO = text_SO / SO_counter #calculate the final SO for the text
-
-basicout.write(os.path.basename(args.input) + "\t" + str(text_SO) + "\n")
-if output_sentences:
-    richout.write("-----\nSO by Sentence\n-----\n")
-    for i in range(len(boundaries)):
-        richout.write(get_sentence(boundaries[i] -1) + " ")
-        if i in sentence_SO:
-            richout.write(str(sentence_SO[i]) + "\n")
-        else:
-            richout.write("0\n")
-if output_calculations:
-    richout.write("---------\nTotal SO: " + str(text_SO) + "\n---------\n")
-
-if adv_learning and new_adv_dict: # output the new adverb
-    f = open(adv_dict_path, "a")  # dictionary
-    for adverb in new_adv_dict:
-        f.write(adverb + "\t" + str(int(adv_dict[adverb])) + "\n")
-    f.close()
-
-basicout.close()
-richout.close()
+for fname in args.input:
+    with open(fname) as ifile:
+        data = json.load(ifile)
+    for doc_i in data["docs"]:
+        process_doc(doc_i, config)
+    with open(fname, 'w') as ofile:
+        json.dump(data, ofile)
