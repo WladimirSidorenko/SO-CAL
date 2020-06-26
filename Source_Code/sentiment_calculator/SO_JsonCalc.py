@@ -1372,7 +1372,7 @@ def compute_polarity_scores(scores: dict, so: SO) -> dict:
     Z_pos_neg = (so.pos_weight + so.neg_weight) or 1.
     pos_score = so.pos_weight / Z_pos_neg
     neg_score = so.neg_weight / Z_pos_neg
-    neut_score = np.log2(so.neut_cnt + 1) / (so.ttl_cnt or 1.)
+    neut_score = min(0.5, (so.neut_cnt) / (so.ttl_cnt or 1.))
     Z = float(pos_score + neg_score + neut_score)
     scores["socal"] = [neg_score/Z, neut_score/Z, pos_score/Z]
     return scores
