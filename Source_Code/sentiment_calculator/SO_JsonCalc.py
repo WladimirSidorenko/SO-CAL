@@ -72,14 +72,14 @@ DFLT_CONFIG = os.path.join(
 ##################################################################
 # Constants
 class SO(object):
-    pos_cnt = 0
-    neg_cnt = 0
-    neut_cnt = 0
-    ttl_cnt = 0
-    pos_weight = 0.
-    neg_weight = 0.
+    pos_cnt: int = 0
+    neg_cnt: int = 0
+    neut_cnt: int = 0
+    ttl_cnt: int = 0
+    pos_weight: float = 0.
+    neg_weight: float = 0.
 
-    def add(self, weight):
+    def add(self, weight) -> None:
         if weight > 0.:
             self.pos_cnt += 1
             self.pos_weight += weight
